@@ -8,4 +8,5 @@ namespace CrazyEightsLib
 {
     public enum CardSuit { Clubs, Diamonds, Hearts, Spades }
     public enum CardRank { Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten, Jack, Queen, King, Ace }
+    public enum ServerCommand { PileCard, HandCard }
 }
