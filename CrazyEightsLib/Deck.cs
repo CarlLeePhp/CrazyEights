@@ -27,7 +27,6 @@ namespace CrazyEightsLib
 
         }
 
-
         public Deck(params CardRank[] ranks)
         {
             for (CardSuit suit = CardSuit.Clubs; suit <= CardSuit.Spades; suit++)
@@ -113,5 +112,13 @@ namespace CrazyEightsLib
             }
             junkCards.Clear();
         }  // Reset Card List
+
+        public void ResetDeck(List<PlayingCard> resetCards)
+        {
+            for(int i=0; i < resetCards.Count; i++)
+            {
+                cards.Add(resetCards[i]);
+            }
+        }  // Reset Deck by a card list
     }
 }

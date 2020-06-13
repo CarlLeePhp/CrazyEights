@@ -11,9 +11,11 @@ namespace CrazyEightsLib
     {
         public string Message { get; set; }
         public string NextPlayer { get; set; }
+        public string Winner { get; set; }
         public ServerCommand Command { get; set; }
         public PlayingCard TopPileCard { get; set; }
         public PlayingCard HandCard { get; set; }
+        public CardSuit PileSuit { get; set; }
         public ServerMessage(ServerCommand command)
         {
             Command = command;

@@ -42,7 +42,10 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ClientMessage.cs" />
     <Compile Include="Deck.cs" />
+    <Compile Include="Player.cs" />
+    <Compile Include="PlayerInfo.cs" />
     <Compile Include="PlayingCard.cs" />
     <Compile Include="ServerMessage.cs" />
     <Compile Include="types.cs" />
