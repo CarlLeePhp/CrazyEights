@@ -38,8 +38,6 @@
             this.labelServerIP = new System.Windows.Forms.Label();
             this.textBoxServer = new System.Windows.Forms.TextBox();
             this.notes = new System.Windows.Forms.RichTextBox();
-            this.checkBoxReady = new System.Windows.Forms.CheckBox();
-            this.timer = new System.Windows.Forms.Timer(this.components);
             this.buttonDeal = new System.Windows.Forms.Button();
             this.buttonPlace = new System.Windows.Forms.Button();
             this.timerRound = new System.Windows.Forms.Timer(this.components);
@@ -179,22 +177,6 @@
             this.notes.TabIndex = 9;
             this.notes.Text = "";
             // 
-            // checkBoxReady
-            // 
-            this.checkBoxReady.AutoSize = true;
-            this.checkBoxReady.Location = new System.Drawing.Point(527, 52);
-            this.checkBoxReady.Name = "checkBoxReady";
-            this.checkBoxReady.Size = new System.Drawing.Size(109, 19);
-            this.checkBoxReady.TabIndex = 10;
-            this.checkBoxReady.Text = "I am ready";
-            this.checkBoxReady.UseVisualStyleBackColor = true;
-            this.checkBoxReady.CheckedChanged += new System.EventHandler(this.checkBoxReady_CheckedChanged);
-            // 
-            // timer
-            // 
-            this.timer.Interval = 500;
-            this.timer.Tick += new System.EventHandler(this.timer_Tick);
-            // 
             // buttonDeal
             // 
             this.buttonDeal.Enabled = false;
@@ -291,7 +273,6 @@
             this.Controls.Add(this.radioButtonClubs);
             this.Controls.Add(this.buttonPlace);
             this.Controls.Add(this.buttonDeal);
-            this.Controls.Add(this.checkBoxReady);
             this.Controls.Add(this.notes);
             this.Controls.Add(this.textBoxServer);
             this.Controls.Add(this.labelServerIP);
@@ -318,8 +299,6 @@
         private System.Windows.Forms.Label labelServerIP;
         private System.Windows.Forms.TextBox textBoxServer;
         private System.Windows.Forms.RichTextBox notes;
-        private System.Windows.Forms.CheckBox checkBoxReady;
-        private System.Windows.Forms.Timer timer;
         private System.Windows.Forms.Button buttonDeal;
         private System.Windows.Forms.Button buttonPlace;
         private System.Windows.Forms.Timer timerRound;

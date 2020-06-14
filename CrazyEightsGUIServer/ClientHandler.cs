@@ -34,7 +34,6 @@ namespace CrazyEightsGUIServer
             // 1. send a message to client
             // 2a. close client connection, End
             // 2b. receive a player infor, create a player and add it to players
-            // 3b. receive prepared from client
             if(_game.Status == GameStatus.Running)
             {
                 _app.DisplayNote("The game is running");
@@ -43,7 +42,7 @@ namespace CrazyEightsGUIServer
                 _client.Close();
                 _app.DisplayNote("Connection closed");
             }
-            else if(_game.Players.Count > 5)
+            else if(_game.Players.Count >= _game.MaxPlayers)
             {
                 _app.DisplayNote("The game cannot receive more players");
                 bfmt.Serialize(_stream, ConnectionResult.Max);
@@ -60,7 +59,7 @@ namespace CrazyEightsGUIServer
                 _player = new Player(playerInfo.PlayerName);
                 _player.MyTcpClient = _client;
                 _player.MyStream = _stream;
-                _game.Players.Add(_player);
+                _game.AddPlayer(_player);
                 _app.DisplayNote(_player.Name + " joined");
                 
             }

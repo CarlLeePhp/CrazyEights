@@ -16,6 +16,7 @@ namespace CrazyEightsLib
         public PlayingCard TopPileCard { get; set; }
         public PlayingCard HandCard { get; set; }
         public CardSuit PileSuit { get; set; }
+        public GameStatus MyStatus { get; set; }
         public ServerMessage(ServerCommand command)
         {
             Command = command;

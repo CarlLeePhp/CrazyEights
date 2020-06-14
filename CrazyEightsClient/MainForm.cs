@@ -25,6 +25,10 @@ namespace CrazyEightsClient
         const int GAP_X = 20;
         const int GAP_Y = 20;
 
+        public bool isMyTurn = false;
+        public bool isSomeoneQuit = false;
+        public bool isSomeoneWin = false;
+
         private Image back;
         private List<Image> faces = new List<Image>();
         private List<PlayingCard> handCards = new List<PlayingCard>();
@@ -32,130 +36,21 @@ namespace CrazyEightsClient
         private PictureBox starterPile;
         private PlayingCard selectedCard;
         private PlayingCard pileCard;
+        ServerHandler server;
         string myName;
-        string winner;
         CardSuit pileSuit;
         IFormatter bfmt;
         TcpClient client;
         NetworkStream stream;
-        bool isGameStart = false;
-        bool isMyTurn = false;
-        bool isSomeoneQuit = false;
-        bool isSomeoneWin = false;
-
-        Thread threadCheckStart;
-        Thread threadCheckTurn;
+        
         public MainForm()
         {
             InitializeComponent();
         }
 
-        delegate void CheckGameStartDel();
-        private void CheckGameStart()
-        {
-
-            object obj;
-            while (true)
-            {
-                if (stream.DataAvailable)
-                {
-                    obj = bfmt.Deserialize(stream);
-                    if(obj is GameStatus)
-                    {
-                        GameStatus gameStatus = (GameStatus)obj;
-                        if(gameStatus == GameStatus.Running)
-                        {
-                            break;
-                        }
-                    }
-                }
-            }
-            isGameStart = true;
-            
-        } // Check Game Start
-
-        private void InitialHands()
-        {
-            
-            // Get initial cards
-            object obj;
-            for (int i = 1; i <= 5; )
-            {
-                if (stream.DataAvailable)
-                {
-                    obj = bfmt.Deserialize(stream);
-                    if (obj is PlayingCard)
-                    {
-                        PlayingCard handCard = obj as PlayingCard;
-                        handCards.Add(handCard);
-                        AddToHand(handCard);
-                        i++;
-                    }
-                }
-                
-            }
-
-            // Get the first starter pile
-            while (true)
-            {
-                if (stream.DataAvailable)
-                {
-                    obj = bfmt.Deserialize(stream);
-                    if (obj is PlayingCard)
-                    {
-                        PlayingCard pileCard = obj as PlayingCard;
-                        AddToPile(pileCard, pileCard.Suit);
-                        break;
-                    }
-                }
-            }
-
-
-        } // Initial Hands
-        private void CheckTurn()
-        {
-            // end when it is my turn
-            while (true)
-            {
-                // could be a player's name or
-                // a pile card
-                if (stream.DataAvailable)
-                {
-                    Object obj = bfmt.Deserialize(stream);
-                    
-                    ServerMessage turnInfo = obj as ServerMessage;
-                    if(turnInfo.Command == ServerCommand.TurnInfo)
-                    {
-                        DisplayNote(turnInfo.NextPlayer + "\'s Turn");
-                        if (turnInfo.NextPlayer == myName)
-                        {
-                            isMyTurn = true;
-                            break;
-                        }
-                    }
-                    if(turnInfo.Command == ServerCommand.PileCard)
-                    {
-                        AddToPile(turnInfo.TopPileCard, turnInfo.PileSuit);
-                    }  // keep tracking
-                    if(turnInfo.Command == ServerCommand.Quit)
-                    {
-                        isSomeoneQuit = true;
-                        break;
-                    } // Some Quit the game
-                    if(turnInfo.Command == ServerCommand.Win)
-                    {
-                        isSomeoneWin = true;
-                        winner = turnInfo.Winner;
-                        break;
-                    }
-                }
-                
-            }
-        }  // Check whose turn
         private void MainForm_Load(object sender, EventArgs e)
         {
-            // check whose turn thread
-            threadCheckTurn = new Thread(new ThreadStart(CheckTurn));
+            
             bfmt = new BinaryFormatter();
             // Pictures for cards
             for (int i = 0; i <= 51; i++)
@@ -167,26 +62,72 @@ namespace CrazyEightsClient
             // Server IP
             textBoxServer.Text = "127.0.0.1";
 
-            // I am ready checkbox
-            checkBoxReady.Checked = false;
-            checkBoxReady.Enabled = false;
 
             // Starter Pile
             starterPile = new PictureBox();
             starterPile.Width = CARD_WIDTH;
             starterPile.Height = CARD_HEIGHT;
             starterPile.Location = new Point(400, 100);
-            
+
             this.Controls.Add(starterPile);
 
             // Place and Deal buttons
             buttonDeal.Enabled = false;
             buttonPlace.Enabled = false;
 
+            //  timer round
+            timerRound.Start();
+
         } // Form Load
+        private void textBoxName_TextChanged(object sender, EventArgs e)
+        {
+            if (textBoxName.Text == String.Empty)
+            {
+                buttonConnect.Enabled = false;
+            }
+            else
+            {
+                buttonConnect.Enabled = true;
+            }
+        }  // input something in the Player Name text box
+        private void buttonConnect_Click(object sender, EventArgs e)
+        {
+            client = new TcpClient();
+            client.Connect(textBoxServer.Text, 2048);
+            stream = client.GetStream();
+            server = new ServerHandler(client, this);
+
+            // Recieve Connection result
+            ConnectionResult result = server.GetConnectionRespond();
+            
+            if (result == ConnectionResult.Success)
+            {
+                buttonConnect.Enabled = false;
+                textBoxName.Enabled = false;
+                buttonQuit.Enabled = true;
+                DisplayNote("Connected");
+                // Send player
+                Thread.Sleep(200);
+                myName = textBoxName.Text;
+                server.SendPlayerInfo(myName);
+                // Run ServerHandler
+                Thread serverHandlerThread = new Thread(new ThreadStart(server.Run));
+                serverHandlerThread.Start();
+            }
+            else if (result == ConnectionResult.Running)
+            {
+                DisplayNote("Game is running, please try again later");
+                client.Close();
+            }
+            else if (result == ConnectionResult.Max)
+            {
+                DisplayNote("Game is running, please try again later");
+                client.Close();
+            }
+        }  // Connect Button
 
         delegate void AddToHandDel(PlayingCard card);
-        private void AddToHand(PlayingCard card)
+        public void AddToHand(PlayingCard card)
         {
             if (InvokeRequired)
             {
@@ -233,7 +174,7 @@ namespace CrazyEightsClient
             
         } // Remove from hand
         delegate void AddToPileDel(PlayingCard card, CardSuit pileSuit);
-        private void AddToPile(PlayingCard card, CardSuit pileSuit)
+        public void AddToPile(PlayingCard card, CardSuit pileSuit)
         {
             if (InvokeRequired)
             {
@@ -286,49 +227,7 @@ namespace CrazyEightsClient
                 buttonPlace.Enabled = false;
             }
         } // card click
-        private void buttonConnect_Click(object sender, EventArgs e)
-        {
-            client = new TcpClient();
-            client.Connect(textBoxServer.Text, 2048);
-            stream = client.GetStream();
-            
-            ConnectionResult result;
-            // Recieve Connection result
-
-            while(true)
-            {
-                if (stream.DataAvailable)
-                {
-                    Object obj = bfmt.Deserialize(stream);
-                    result = (ConnectionResult)obj;
-                    break;
-                }
-                
-            }
-            if(result == ConnectionResult.Success)
-            {
-                buttonConnect.Enabled = false;
-                notes.AppendText("Connected");
-                // Send player
-                Thread.Sleep(200);
-                myName = textBoxName.Text;
-                PlayerInfo player = new PlayerInfo(textBoxName.Text);
-                bfmt.Serialize(stream, player);
-                checkBoxReady.Enabled = true;
-            }
-            else if(result == ConnectionResult.Running)
-            {
-                DisplayNote("Game is running, please try again later");
-                stream.Close();
-                client.Close();
-            }
-            else if(result == ConnectionResult.Max)
-            {
-                DisplayNote("Game is running, please try again later");
-                stream.Close();
-                client.Close();
-            }
-        }  // Connect Button
+        
         delegate void DisplayNoteDel(string msg);
         public void DisplayNote(string msg)
         {
@@ -344,82 +243,22 @@ namespace CrazyEightsClient
             }
 
         } // Display Note
-        private void buttonTest_Click(object sender, EventArgs e)
-        {
-            Deck deck = new Deck();
-            // deck.Shuffle();
-            for(int i=1; i<=5; i++)
-            {
-                AddToHand(deck.DealTopCard());
-            }
-        }
-
-        private void textBoxName_TextChanged(object sender, EventArgs e)
-        {
-            if(textBoxName.Text == String.Empty)
-            {
-                buttonConnect.Enabled = false;
-            }
-            else
-            {
-                buttonConnect.Enabled = true;
-            }
-        }  // input something in the Player Name text box
-
         
-        private void checkBoxReady_CheckedChanged(object sender, EventArgs e)
-        {
-            PlayerStatus playerStatus = PlayerStatus.Preparing;
-            if (checkBoxReady.Checked)
-            {
-                playerStatus = PlayerStatus.Ready;
-                // check game start thread
-                threadCheckStart = new Thread(new ThreadStart(CheckGameStart));
-                threadCheckStart.Start();
-                timer.Start();
-            }
-            else
-            {
-                threadCheckStart.Abort();
-            }
-            bfmt.Serialize(stream, playerStatus);
-        } // Checkbox Ready Changed
-
-        private void timer_Tick(object sender, EventArgs e)
-        {
-            if (isGameStart)
-            {
-                timer.Stop();
-                checkBoxReady.Enabled = false;
-                InitialHands();
-                timerRound.Start();
-                threadCheckTurn.Start();
-            }
-            
-            
-        }  // timer for checking the game stated or not
-
         private void timerRound_Tick(object sender, EventArgs e)
         {
             // Deal and Place buttons is availabel when it is my turn
             if (isMyTurn)
             {
-                timerRound.Stop();
-                threadCheckTurn.Abort();
                 buttonDeal.Enabled = true;
                 buttonQuit.Enabled = true;
+                timerRound.Stop();
             }
             if (isSomeoneQuit)
             {
-                timerRound.Stop();
-                threadCheckTurn.Abort();
                 ResetGame();
             }
             if (isSomeoneWin)
             {
-                timerRound.Stop();
-                threadCheckTurn.Abort();
-                DisplayNote(winner + " Won!");
                 ResetGame();
             }
         }  // timer round
@@ -434,7 +273,6 @@ namespace CrazyEightsClient
             ClientMessage pileCardInfo;
             if (handCardImages.Count == 0)
             {
-                DisplayNote("I Won");
                 pileCardInfo = new ClientMessage(ClientCommand.Win);
             }
             else
@@ -453,12 +291,19 @@ namespace CrazyEightsClient
             // End my turn
             // Check it is my turn?
             isMyTurn = false;
+            buttonDeal.Enabled = false;
+            buttonQuit.Enabled = false;
             timerRound.Start();
-            threadCheckTurn = new Thread(new ThreadStart(CheckTurn));
-            threadCheckTurn.Start();
             buttonDeal.Enabled = false;
             buttonPlace.Enabled = false;
             buttonQuit.Enabled = false;
+            if (radioButtonClubs.Enabled)
+            {
+                radioButtonClubs.Enabled = false;
+                radioButtonDiamonds.Enabled = false;
+                radioButtonHearts.Enabled = false;
+                radioButtonSpades.Enabled = false;
+            }
         }  // place a selected card
 
         private CardSuit ChangeSuit()
@@ -501,10 +346,8 @@ namespace CrazyEightsClient
 
         private void buttonQuit_Click(object sender, EventArgs e)
         {
-            ClientMessage quitMessage = new ClientMessage(ClientCommand.Quit);
-            bfmt.Serialize(stream, quitMessage);
-
-            stream.Close();
+            server.QuitGame();
+            
             client.Close();
 
             this.Close();
@@ -513,12 +356,13 @@ namespace CrazyEightsClient
 
         private void ResetGame()
         {
-            
+            isSomeoneQuit = false;
+            isSomeoneWin = false;
+            isMyTurn = false;
+
             buttonPlace.Enabled = false;
             buttonDeal.Enabled = false;
-            buttonQuit.Enabled = false;
-            checkBoxReady.Enabled = true;
-            checkBoxReady.Checked = false;
+            buttonQuit.Enabled = true;
             radioButtonClubs.Enabled = false;
             radioButtonDiamonds.Enabled = false;
             radioButtonHearts.Enabled = false;

@@ -16,12 +16,13 @@ namespace CrazyEightsGUIServer
         public GameStatus Status { get; set; }
         public GameType MyType { get; set; }
         public List<Player> Players { get; set; }
-
+        public int MaxPlayers { get; set; }
+        public bool done;
         private MainForm _app;
         Deck _deck;
         List<PlayingCard> _pileCards = new List<PlayingCard>();
         int _currentPlayerIdex;
-        bool done;
+        
         IFormatter bfmt;
         public Game(string name, MainForm app)
         {
@@ -43,39 +44,34 @@ namespace CrazyEightsGUIServer
             while (!done)
             {
                 InitialGame();
-                Console.WriteLine("Game is running");
-                bool allReady = false;
-                while (!allReady)
+                _app.DisplayNote("Game is prepared");
+                while (Players.Count < MaxPlayers)
                 {
-                    
-                    allReady = true;
-
-                    for(int i=0; i<Players.Count; i++)
+                    for (int i = 0; i < Players.Count; i++)
                     {
                         if (Players[i].MyStream.DataAvailable)
                         {
                             Object obj = bfmt.Deserialize(Players[i].MyStream);
-                            if (obj is PlayerStatus)
+                            if(obj is ClientMessage)
                             {
-                                Players[i].Status = (PlayerStatus)obj;
+                                ClientMessage clientMessage = obj as ClientMessage;
+                                if(clientMessage.Command == ClientCommand.Quit)
+                                {
+                                    _app.DisplayNote(Players[i].Name + " quited");
+                                    Players[i].MyStream.Close();
+                                    Players[i].MyTcpClient.Close();
+                                    Players.RemoveAt(i);
+                                    if(Players.Count > 0)
+                                    {
+                                        ServerMessage quitMessage = new ServerMessage(ServerCommand.Quit);
+                                        Broadcast(quitMessage);
+                                    }
+                                }
                             }
-                            _app.DisplayNote(Players[i].Name + " is " + Players[i].Status.ToString());
-                            _app.DisplayNote("There are " + Players.Count + " players");
                         }
-
-                        if (Players[i].Status == PlayerStatus.Preparing)
-                        {
-                            
-                            allReady = false;
-                        }
-                    }
-
-                    if (Players.Count < 2)
-                    {
-                        allReady = false;
                     }
                 }
-
+                
                 Status = GameStatus.Running;
 
                 GameStart();
@@ -87,77 +83,67 @@ namespace CrazyEightsGUIServer
                 }
 
                 Status = GameStatus.Waiting;
-                foreach(Player player in Players)
-                {
-                    player.Status = PlayerStatus.Preparing;
-                }
+                
             }
         } // Run
-
         private void InitialGame()
         {
             // prepare the deck
             _deck = new Deck();
             _deck.Shuffle();
         } // Initial Game
-
+        private void Broadcast(ServerMessage broadcastMessage)
+        {
+            foreach (Player player in Players)
+            {
+                bfmt.Serialize(player.MyStream, broadcastMessage);
+            }
+            Thread.Sleep(200);
+        } // Broadcast
+       
         private void GameStart()
         {
-            _app.DisplayNote("Game Started");
-            // Send start to client
-            for (int i = 1; i <= 5; i++)
-            {
-                foreach (Player player in Players)
-                {
-                    bfmt.Serialize(player.MyStream, GameStatus.Running);
-                }
-            }
+            _app.DisplayNote("Game starts");
+            ServerMessage statusMessage = new ServerMessage(ServerCommand.Message);
+            statusMessage.Message = "Game starts";
+            Broadcast(statusMessage);
+            
             // 5 hand cards each player
             // Send 5 cards to each player
             for (int i = 1; i <= 5; i++)
             {
                 foreach (Player player in Players)
                 {
-                    PlayingCard handCard = _deck.DealTopCard();
+                    ServerMessage handCard = new ServerMessage(ServerCommand.HandCard);
+                    handCard.HandCard = _deck.DealTopCard();
                     bfmt.Serialize(player.MyStream, handCard);
-                    _app.DisplayNote(handCard.ToString());
+                    _app.DisplayNote(handCard.HandCard.ToString());
                 }
                 Thread.Sleep(200);
             }
 
             // Send a message with a starter card
             // and identifying who is the next
-            PlayingCard card = _deck.DealTopCard();
-            while (card.Rank == CardRank.Eight)
+            PlayingCard pileCard = _deck.DealTopCard();
+            while (pileCard.Rank == CardRank.Eight)
             {
-                // To Do the Eight must insert into deck
-                card = _deck.DealTopCard();
+                _pileCards.Add(pileCard);
+                pileCard = _deck.DealTopCard();
             }
 
-            //ServerMessage topPileCardMessage = new ServerMessage(ServerCommand.PileCard);
-            //topPileCardMessage.TopPileCard = card;
-            //topPileCardMessage.NextPlayer = Players[0].Name;
-            //topPileCardMessage.Message = topPileCardMessage.NextPlayer + " Turn";
-
-            foreach (Player player in Players)
-            {
-                bfmt.Serialize(player.MyStream, card);
-            }
-            Thread.Sleep(200);
-            _app.DisplayNote("Game Prepared");
+            ServerMessage pileCardMessage = new ServerMessage(ServerCommand.PileCard);
+            pileCardMessage.TopPileCard = pileCard;
+            pileCardMessage.PileSuit = pileCard.Suit;
+            Broadcast(pileCardMessage);
 
         }  // Game Start
         private bool NextTurn()
         {
-
             bool gameEnd = false;
             // Whose turn
             ServerMessage turnInfo = new ServerMessage(ServerCommand.TurnInfo);
             turnInfo.NextPlayer = Players[_currentPlayerIdex].Name;
-            foreach (Player player in Players)
-            {
-                bfmt.Serialize(player.MyStream, turnInfo);
-            }
+            Broadcast(turnInfo);
 
             // must wait for player's reply
             while (true)
@@ -170,16 +156,13 @@ namespace CrazyEightsGUIServer
                     // It should be sent as a pile card for all players
                     if (clientMessage.Command == ClientCommand.PileCard)
                     {
-                        _app.DisplayNote("Got pile card " + clientMessage.PileCard.ToString());
+                        _app.DisplayNote("Got a pile card " + clientMessage.PileCard.ToString());
                         _pileCards.Add(clientMessage.PileCard);
                         _app.DisplayNote("Pile Card: " + _pileCards.Count);
                         ServerMessage pileCardInfo = new ServerMessage(ServerCommand.PileCard);
                         pileCardInfo.TopPileCard = clientMessage.PileCard;
                         pileCardInfo.PileSuit = clientMessage.PileSuit;
-                        foreach (Player player in Players)
-                        {
-                            bfmt.Serialize(player.MyStream, pileCardInfo);
-                        }
+                        Broadcast(pileCardInfo);
                         _currentPlayerIdex++;
                         if(_currentPlayerIdex == Players.Count) _currentPlayerIdex = 0;
                         break;
@@ -210,24 +193,19 @@ namespace CrazyEightsGUIServer
                         gameEnd = true;
                         ServerMessage winnerInfo = new ServerMessage(ServerCommand.Win);
                         winnerInfo.Winner = Players[_currentPlayerIdex].Name;
-                        foreach (Player player in Players)
-                        {
-                            bfmt.Serialize(player.MyStream, winnerInfo);
-                        }
+                        Broadcast(winnerInfo);
                         break;
                     }
 
                     // A player quit game
                     if(clientMessage.Command == ClientCommand.Quit)
                     {
+                        _app.DisplayNote(Players[_currentPlayerIdex].Name + " quited");
                         Players[_currentPlayerIdex].MyStream.Close();
                         Players[_currentPlayerIdex].MyTcpClient.Close();
                         Players.RemoveAt(_currentPlayerIdex);
                         ServerMessage quitMessage = new ServerMessage(ServerCommand.Quit);
-                        foreach (Player player in Players)
-                        {
-                            bfmt.Serialize(player.MyStream, quitMessage);
-                        }
+                        Broadcast(quitMessage);
                         gameEnd = true;
                         break;
                     }
@@ -236,5 +214,14 @@ namespace CrazyEightsGUIServer
             
             return gameEnd;
         } // Next turn
+
+        public void AddPlayer(Player player)
+        {
+            Players.Add(player);
+            ServerMessage statusMessage = new ServerMessage(ServerCommand.Message);
+            statusMessage.Message = "Waiting for " + (MaxPlayers - Players.Count) + " more players";
+            _app.DisplayNote(statusMessage.Message);
+            Broadcast(statusMessage);
+        } // add a player
     }
 }
