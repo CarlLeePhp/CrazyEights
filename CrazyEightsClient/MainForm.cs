@@ -220,6 +220,10 @@ namespace CrazyEightsClient
             }
             else if (isMyTurn && selectedCard.Suit == pileSuit || selectedCard.Rank == pileCard.Rank)
             {
+                radioButtonClubs.Enabled = false;
+                radioButtonDiamonds.Enabled = false;
+                radioButtonHearts.Enabled = false;
+                radioButtonSpades.Enabled = false;
                 buttonPlace.Enabled = true;
             }
             else
